@@ -37,7 +37,7 @@ namespace Azure.Functions.Cli.Actions.HostActions
         private const int DefaultPort = 7071;
         private const int DefaultTimeout = 20;
         private readonly ISecretsManager _secretsManager;
-        private readonly LogLevel _hostJsonDefaulLogLevel = LogLevel.Information;
+        private LogLevel _defaultLogLevel = LogLevel.Information;
 
         public int Port { get; set; }
 
@@ -58,12 +58,17 @@ namespace Azure.Functions.Cli.Actions.HostActions
         public bool NoBuild { get; set; }
 
         public bool EnableAuth { get; set; }
+
+        public bool SilentLogging { get; set; }
+
+        public bool VerboseLogging { get; set; }
+
         public List<string> EnabledFunctions { get; private set; }
 
         public StartHostAction(ISecretsManager secretsManager)
         {
             _secretsManager = secretsManager;
-            _hostJsonDefaulLogLevel = Utilities.GetHostJsonDefaultLogLevel();
+            _defaultLogLevel = Utilities.GetHostJsonDefaultLogLevel();
         }
 
         public override ICommandLineParserResult ParseArgs(string[] args)
@@ -132,6 +137,18 @@ namespace Azure.Functions.Cli.Actions.HostActions
                 .WithDescription("A space seperated list of functions to load.")
                 .Callback(f => EnabledFunctions = f);
 
+            Parser
+                .Setup<bool>('q', "quite")
+                .WithDescription("Sets Default LogLevel to None. Use --verbose for detailed output")
+                .SetDefault(true)
+                .Callback(s => SilentLogging = s);
+
+            Parser
+                .Setup<bool>('v', "verbose")
+                .WithDescription("Sets Default LogLevel to Information. Use --quite for less verbose output")
+                .SetDefault(true)
+                .Callback(v => VerboseLogging = v);
+
             return base.ParseArgs(args);
         }
 
@@ -164,14 +181,14 @@ namespace Azure.Functions.Cli.Actions.HostActions
                 })
                 .ConfigureLogging(loggingBuilder =>
                 {
-                    if (_hostJsonDefaulLogLevel != LogLevel.None)
+                    loggingBuilder.ClearProviders();
+                    if (_defaultLogLevel != LogLevel.None)
                     {
-                        loggingBuilder.ClearProviders();
                         loggingBuilder.AddDefaultWebJobsFilters();
                         loggingBuilder.AddProvider(new ColoredConsoleLoggerProvider((cat, level) => level >= LogLevel.Information));
                     }
                 })
-                .ConfigureServices((context, services) => services.AddSingleton<IStartup>(new Startup(context, hostOptions, CorsOrigins, CorsCredentials, EnableAuth, _hostJsonDefaulLogLevel)))
+                .ConfigureServices((context, services) => services.AddSingleton<IStartup>(new Startup(context, hostOptions, CorsOrigins, CorsCredentials, EnableAuth, _defaultLogLevel)))
                 .Build();
         }
 
@@ -231,7 +248,10 @@ namespace Azure.Functions.Cli.Actions.HostActions
         public override async Task RunAsync()
         {
             await PreRunConditions();
-            Utilities.PrintLogo();
+            if (_defaultLogLevel != LogLevel.None)
+            {
+                Utilities.PrintLogo();
+            }
             Utilities.PrintVersion();
             ValidateHostJsonConfiguration();
 
@@ -271,6 +291,10 @@ namespace Azure.Functions.Cli.Actions.HostActions
 
         private async Task PreRunConditions()
         {
+            if (SilentLogging)
+            {
+                _defaultLogLevel = LogLevel.None;
+            }
             if (GlobalCoreToolsSettings.CurrentWorkerRuntime == WorkerRuntime.python)
             {
                 var pythonVersion = await PythonHelpers.GetEnvironmentPythonVersion();
