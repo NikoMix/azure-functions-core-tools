@@ -168,18 +168,10 @@ namespace Azure.Functions.Cli
             return localPath;
         }
 
-        internal static LogLevel GetHostJsonDefaultLogLevel()
+        internal static bool LogLevelExists()
         {
-            try
-            {
-                var hostJson = JsonConvert.DeserializeObject<JObject>(FileSystemHelpers.ReadAllTextFromFile("host.json"));
-                return (LogLevel)Enum.Parse(typeof(LogLevel), hostJson["Logging"]["LogLevel"]["Default"].ToString());
-            }
-            catch (Exception)
-            {
-                // Default log level
-                return LogLevel.Information;
-            }
+            var hostJson = FileSystemHelpers.ReadAllTextFromFile("host.json");
+            return hostJson.Contains("\"logging\"", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

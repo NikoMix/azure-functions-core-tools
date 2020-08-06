@@ -37,7 +37,7 @@ namespace Azure.Functions.Cli.Actions.HostActions
         private const int DefaultPort = 7071;
         private const int DefaultTimeout = 20;
         private readonly ISecretsManager _secretsManager;
-        private LogLevel _defaultLogLevel = LogLevel.Information;
+        private LogLevel _defaultLogLevel = LogLevel.None;
 
         public int Port { get; set; }
 
@@ -59,8 +59,6 @@ namespace Azure.Functions.Cli.Actions.HostActions
 
         public bool EnableAuth { get; set; }
 
-        public bool SilentLogging { get; set; }
-
         public bool VerboseLogging { get; set; }
 
         public List<string> EnabledFunctions { get; private set; }
@@ -68,7 +66,10 @@ namespace Azure.Functions.Cli.Actions.HostActions
         public StartHostAction(ISecretsManager secretsManager)
         {
             _secretsManager = secretsManager;
-            _defaultLogLevel = Utilities.GetHostJsonDefaultLogLevel();
+            if (Utilities.LogLevelExists())
+            {
+                _defaultLogLevel = LogLevel.Information;
+            }
         }
 
         public override ICommandLineParserResult ParseArgs(string[] args)
@@ -138,15 +139,9 @@ namespace Azure.Functions.Cli.Actions.HostActions
                 .Callback(f => EnabledFunctions = f);
 
             Parser
-                .Setup<bool>('q', "quite")
-                .WithDescription("Sets Default LogLevel to None. Use --verbose for detailed output")
-                .SetDefault(true)
-                .Callback(s => SilentLogging = s);
-
-            Parser
                 .Setup<bool>('v', "verbose")
-                .WithDescription("Sets Default LogLevel to Information. Use --quite for less verbose output")
-                .SetDefault(true)
+                .WithDescription("Sets Default LogLevel to Information.")
+                .SetDefault(false)
                 .Callback(v => VerboseLogging = v);
 
             return base.ParseArgs(args);
@@ -182,13 +177,13 @@ namespace Azure.Functions.Cli.Actions.HostActions
                 .ConfigureLogging(loggingBuilder =>
                 {
                     loggingBuilder.ClearProviders();
-                    if (_defaultLogLevel != LogLevel.None)
+                    if (_defaultLogLevel != LogLevel.None || VerboseLogging)
                     {
                         loggingBuilder.AddDefaultWebJobsFilters();
                         loggingBuilder.AddProvider(new ColoredConsoleLoggerProvider((cat, level) => level >= LogLevel.Information));
                     }
                 })
-                .ConfigureServices((context, services) => services.AddSingleton<IStartup>(new Startup(context, hostOptions, CorsOrigins, CorsCredentials, EnableAuth, _defaultLogLevel)))
+                .ConfigureServices((context, services) => services.AddSingleton<IStartup>(new Startup(context, hostOptions, CorsOrigins, CorsCredentials, EnableAuth, _defaultLogLevel == LogLevel.None)))
                 .Build();
         }
 
@@ -248,7 +243,7 @@ namespace Azure.Functions.Cli.Actions.HostActions
         public override async Task RunAsync()
         {
             await PreRunConditions();
-            if (_defaultLogLevel != LogLevel.None)
+            if (VerboseLogging)
             {
                 Utilities.PrintLogo();
             }
@@ -270,7 +265,10 @@ namespace Azure.Functions.Cli.Actions.HostActions
             var httpOptions = hostService.Services.GetRequiredService<IOptions<HttpOptions>>();
             DisplayHttpFunctionsInfo(scriptHost, httpOptions.Value, baseUri);
             DisplayDisabledFunctions(scriptHost);
-
+            if (!VerboseLogging)
+            {
+                ColoredConsole.WriteLine(Cyan("For detailed output, run func with --verbose flag."));
+            }
             await runTask;
         }
 
@@ -291,9 +289,9 @@ namespace Azure.Functions.Cli.Actions.HostActions
 
         private async Task PreRunConditions()
         {
-            if (SilentLogging)
+            if (VerboseLogging)
             {
-                _defaultLogLevel = LogLevel.None;
+                _defaultLogLevel = LogLevel.Information;
             }
             if (GlobalCoreToolsSettings.CurrentWorkerRuntime == WorkerRuntime.python)
             {

@@ -24,14 +24,14 @@ namespace Azure.Functions.Cli.Actions.HostActions
         private readonly string[] _corsOrigins;
         private readonly bool _corsCredentials;
         private readonly bool _enableAuth;
-        private readonly LogLevel _defaultLogLevel;
+        private readonly bool _isDefaultLogLevelNone;
 
-        public Startup(WebHostBuilderContext builderContext, ScriptApplicationHostOptions hostOptions, string corsOrigins, bool corsCredentials, bool enableAuth, LogLevel defaultLogLevel)
+        public Startup(WebHostBuilderContext builderContext, ScriptApplicationHostOptions hostOptions, string corsOrigins, bool corsCredentials, bool enableAuth, bool isDefaultLogLevelNone)
         {
             _builderContext = builderContext;
             _hostOptions = hostOptions;
             _enableAuth = enableAuth;
-            _defaultLogLevel = defaultLogLevel;
+            _isDefaultLogLevelNone = isDefaultLogLevelNone;
 
             if (!string.IsNullOrEmpty(corsOrigins))
             {
@@ -79,7 +79,7 @@ namespace Azure.Functions.Cli.Actions.HostActions
 
             services.AddSingleton<IConfigureBuilder<IConfigurationBuilder>>(_ => new ExtensionBundleConfigurationBuilder(_hostOptions));
             services.AddSingleton<IConfigureBuilder<IConfigurationBuilder>, DisableConsoleConfigurationBuilder>();
-            services.AddSingleton<IConfigureBuilder<ILoggingBuilder>>(_ => new LoggingBuilder(_defaultLogLevel));
+            services.AddSingleton<IConfigureBuilder<ILoggingBuilder>>(_ => new LoggingBuilder(_isDefaultLogLevelNone));
 
             services.AddSingleton<IDependencyValidator, ThrowingDependencyValidator>();
 
